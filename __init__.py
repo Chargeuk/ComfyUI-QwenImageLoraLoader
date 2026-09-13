@@ -52,19 +52,23 @@ except ImportError:
 # -----------------------------------------------------
 
 # --- Nunchaku Monkey Patch Application ---
-try:
-    from .patches.nunchaku_patch import apply_nunchaku_patch
-    if apply_nunchaku_patch():
-        logger.info(
-            "Successfully applied Nunchaku monkey patches (Qwen LoRA planar injection; "
-            "Z-Image/SVDQ lazy Linear compat when ComfyUI defers Linear weights)."
-        )
-    else:
-        logger.warning(
-            "No Nunchaku patches applied (nunchaku / NunchakuQwenImageTransformerBlock not found)."
-        )
-except Exception as e:
-    logger.error(f"Error importing/applying Nunchaku monkey patch: {e}")
+# shared-comfyui-patch:optional-nunchaku-probe
+if _NUNCHAKU_AVAILABLE:
+    try:
+        from .patches.nunchaku_patch import apply_nunchaku_patch
+        if apply_nunchaku_patch():
+            logger.info(
+                "Successfully applied Nunchaku monkey patches (Qwen LoRA planar injection; "
+                "Z-Image/SVDQ lazy Linear compat when ComfyUI defers Linear weights)."
+            )
+        else:
+            logger.warning(
+                "No Nunchaku patches applied (nunchaku / NunchakuQwenImageTransformerBlock not found)."
+            )
+    except Exception as e:
+        logger.error(f"Error importing/applying Nunchaku monkey patch: {e}")
+else:
+    logger.info("Nunchaku is unavailable; skipping its optional monkey patch.")
 # -----------------------------------------
 
 # --- SAM3 segmentation-head scalp patch (upstream PR #15979 parity) ---
