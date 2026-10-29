@@ -5,7 +5,27 @@
   </tr>
 </table>
 
-### v2.6.4 (最新)
+### v2.6.7 (最新)
+- **已修复**：ComfyUI >= 0.38 下对 Nunchaku Z-Image 模型执行任何 `model.clone()` 时抛出 `TypeError: ZImageModelPatcher.__init__() got an unexpected keyword argument 'fast_disk'`（例如采样过程中 EasyCache 节点会调用 `model.clone()`；升级 ComfyUI v0.38.1 后出现）。
+  - 根因：ComfyUI v0.38 的 `ModelPatcher.clone()` 重新实例化子类时必定传入 `fast_disk=`，而上游 ComfyUI-nunchaku（已停止开发）的 `ZImageModelPatcher.__init__` 只声明 `(model, load_device, offload_device, size, weight_inplace_update)`。clone 失败还会在 GC 时对半成品对象连带抛出 `AttributeError: 'ZImageModelPatcher' object has no attribute 'pinned'`。
+  - 修复：`patches/nunchaku_patch.py` 新增 `apply_nunchaku_zimage_fast_disk_patch()` —— 内存运行时包装，让 `ZImageModelPatcher.__init__` 接受并保存 `fast_disk`，nunchaku 包文件本身 100% 不动。幂等（带标记的包装器）；若未来 nunchaku 版本已声明该参数则自动 no-op；仅通过 `sys.modules` 扫描定位类（绝不重新 import，保证打补丁的就是 ComfyUI 实际在用的类对象）；加载顺序竞态与 fuse 补丁共用已有的重试定时器。
+  - 实测：独立构造测试通过（fast_disk 正确保存，`svdq_backup`/`pinned` 完好，旧式调用不受影响）；完整混合工作流（HSWQ ConvRot NVFP4 UNet + INT8 ControlNet patches + EasyCache clone）端到端无错误跑通。
+- **技术详情**：参阅 [v2.6.7 发布说明](v2.6.7.md)。
+
+### v2.6.6
+- **已移除**：`patches/rgthree_logo_route_guard.py` —— 由于 [rgthree-comfy#763](https://github.com/rgthree/rgthree-comfy/pull/763)（由 ussoewwin 提交）已在上游合并，rgthree logo 路由的自防御补丁不再需要；同时删除了 `__init__.py` 中对应的 import 与调用块。
+  - 该补丁原本只校验 rgthree 为其 logo 抓取的内容，并在非 SVG 时回退到随包 SVG；上游修正到位后（本机安装的 rgthree-comfy 中已包含提交 `17f1848`），它已成为冗余。
+  - 其他内容未做任何改动：其他补丁、模块与节点行为均不受影响（已实测——代码库中无残留引用，语法检查通过）。
+- **技术详情**：参阅 [v2.6.6 发布说明](v2.6.6.md)。
+
+### v2.6.5
+- **已修复**：ComfyUI 前端开始把自定义部件“采用”为具象类之后，V1 LoRA 堆叠节点（`NunchakuQwenImageLoraStackV1`、`NunchakuZImageTurboLoraStackV1`）丢失了行交互：右键行命中检测、自定义四项菜单（开关 / 上移 / 下移 / 移除）、行的上下移动、以及载入工作流时的行清理全部失效。
+  - 根因：部件采用会保留同一个部件对象但替换其 prototype（`adoptConcreteWidget`），因此 `w instanceof NunchakuLoraWidget` 恒为 `false`，`js/z_qwen_lora_dynamic_v1.js` 与 `js/zimageturbo_lora_dynamic_v1.js` 中的 4 处判定不再命中。
+  - 修复（[PR #54](https://github.com/ussoewwin/ComfyUI-QwenImageLoraLoader/pull/54)，由 DrJKL 贡献）：改用各节点已有的实时 `loraWidgets` 成员关系作为身份契约，替代 `instanceof`，每文件 4 行，不添加持久化标记、不新增状态。在没有部件采用机制的前端上行为不变。
+  - 影响范围：部件采用机制自 ComfyUI_frontend v1.53.3 起存在（上游追踪 issue [Comfy-Org/ComfyUI_frontend#17817](https://github.com/Comfy-Org/ComfyUI_frontend/issues/17817)）。V2/V3/V4 与 `widgethider.js` 已实测不受影响。
+- **技术详情**：参阅 [v2.6.5 发布说明](v2.6.5.md)。
+
+### v2.6.4
 - **新增**：rgthree-comfy logo 路由自防御补丁 —— `patches/rgthree_logo_route_guard.py` 会校验 rgthree 从 `tool.comfy.Icon` 缓存的返回内容，非 SVG（代理 / 强制门户 / CDN 错误页）时回退到 rgthree 自带的 logo。
   - 未做校验时，`rgthree-comfy/py/server/routes_config.py:get_logo` 中的 `str.format()` 会对每个请求抛出 `ValueError: unexpected '{' in field name`（错误内容被缓存，直到重启），而仅让异常消失会把错误页当作 logo 渲染。
   - 在 `routes_config` 已导入时立即应用，并在 `PromptServer` 启动时再次应用（UI 会在任何提示运行前请求 logo）。正常 SVG 内容原样透传。
